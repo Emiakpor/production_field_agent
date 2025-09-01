@@ -1,0 +1,73 @@
+{
+  "well_id": "Well-23",
+
+  "static": {
+    "depth_md": 3200,
+    "depth_tvd": 2800,
+    "reservoir_pressure_initial": 4200,
+    "bubble_point_pressure": 2200,
+    "permeability_md": 120,
+    "porosity_percent": 18,
+    "net_pay_thickness_ft": 65,
+    "completion_type": "horizontal",
+    "lift_type": "ESP",
+    "region": "Delta_Field"
+  },
+
+  "controls": {
+    "choke_size_percent": 75,
+    "gas_lift_rate_mscf_day": 500,
+    "pump_frequency_hz": 55,
+    "pump_intake_pressure_psi": 1350,
+    "pump_discharge_pressure_psi": 2200,
+    "compressor_suction_psi": 250,
+    "compressor_discharge_psi": 1200,
+    "chemical_injection_rate_lph": 12
+  },
+
+  "sensors": {
+    "tubing_head_pressure_psi": 1450,
+    "casing_head_pressure_psi": 1550,
+    "bottomhole_pressure_psi": 3100,
+    "wellhead_temperature_c": 78,
+    "separator_inlet_pressure_psi": 1200,
+    "separator_inlet_temperature_c": 65,
+    "annulus_pressure_psi": 900,
+    "dp_across_choke_psi": 250,
+    "esp_vibration_mm_s": 2.3,
+    "esp_current_amp": 45
+  },
+
+  "production": {
+    "oil_rate_bopd": 1250,
+    "gas_rate_mscf_day": 2400,
+    "water_rate_bwpd": 480,
+    "water_cut_percent": 27.8,
+    "gor_scf_bbl": 1920,
+    "liquid_rate_bpd": 1730
+  },
+
+  "derived": {
+    "drawdown_psi": 1100,
+    "productivity_index_bbl_day_psi": 1.2,
+    "pump_efficiency_bbl_per_kw": 0.87,
+    "normalized_oil_rate": 19.2,
+    "reynolds_number": 152000
+  },
+
+  "environment": {
+    "ambient_temp_c": 34,
+    "ambient_pressure_psi": 14.7,
+    "humidity_percent": 72,
+    "grid_voltage_stability_percent": 95,
+    "maintenance_event": false,
+    "shutdown_flag": false
+  },
+
+  "time": {
+    "timestamp": "2025-08-19T10:45:00Z",
+    "day_of_week": "Tuesday",
+    "day_of_year": 231,
+    "shift": "morning"
+  }
+}
