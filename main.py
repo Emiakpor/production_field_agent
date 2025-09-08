@@ -1,119 +1,181 @@
-from fastapi import FastAPI
-from src.models.models import ForecastInput
-from src.functions.train_predict_model import build_xbg_model_predict, build_lstm_model_predict
-from src.functions.predict_agent import xgb_predict, lstm_predict, error_predict, get_monthly_average_data
-from src.functions.predict_plot import plot_predict 
-from src.functions.gen_data import generate_template_data, generate_history_data
-from src.functions.train_forecast_xgboost_model import build_xgboost_model_forecast
-from src.functions.train_forecast_lstm_model import build_lstm_model_forecast
-from src.functions.forecast import xgb_forecast, lstm_forecast, lstm_explanation, lstm_forecast_plot, plot_forecast, error_forecast
-from src.functions.gen_lstm_model import build_model
-from src.functions.predict_with_lstm import predict_production, plot_history, plot_scatter, plot_test, plot_train
+from fastapi import FastAPI, UploadFile, Form
+from fastapi.responses import FileResponse, JSONResponse
+import pandas as pd
+from src.functions.lstm_predict_model import WellLSTMModel
+from src.functions.xgb_predict_model import XGBModel
+import io
+import pandas as pd
+import matplotlib.pyplot as plt
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
-app = FastAPI(title="Oilfield Forecasting Predictor", version="1.0")
-@app.get("/")
-async def root():
-    return {"message": "Hello, World!"}
+app = FastAPI(title="Well Production LSTM API")
 
-@app.get("/gen_model_forecast")
-def gen_model():    
-    build_xgboost_model_forecast()
-    build_lstm_model_forecast()
-    return {f"message: created forecast model"}
+INPUT_EXCEL = "./src/resource/oilfield_sample_data_with_units.xlsx"
+XGB_MODEL_PATH = "./src/created_model/xgb/xgb_model.pkl"
+LSTM_MODEL_PATH = "./src/created_model/lstm/lstm_model.h5"
+LSTM_MODEL_DIR = "./src/created_model/lstm"
+XGB_MODEL_DIR = "./src/created_model/xgb"
+XGB_PLOT_DIR = "./src/plot/xgb"
+LSTM_PLOT_DIR = "./src/plot/lstm"
 
-@app.get("/gen_model_predict")
-def gen_model():    
-    build_xbg_model_predict()
-    build_lstm_model_predict()
-    return {f"message: created predict model"}
+LSTM_EXCEL_DIR = "./src/prediction/lstm"
+XGB_EXCEL_DIR = "./src/prediction/xgb"
+LSTM_PREDICTION_EXCEL = "./src/prediction/lstm/predictions_lstm.xlsx"
+XGB_PREDICTION_EXCEL = "./src/prediction/xgb/predictions_xgb.xlsx"
 
-@app.get("/gen_lstm_model")
-def gen_model1():    
-    build_model()
-    return {f"message: created predict model"}
+# save_dir="src/predictions/xgb"
 
+class PlotRequest(BaseModel):
+    well_id: str
+    cumulative: bool = False
 
-@app.get("/xgb_predict")
-def forecast():
+TARGET_COLS = [
+    "oil_rate_bopd (BOPD)",
+    "gas_rate_mscf_day (MSCF/day)",
+    "water_rate_bwpd (BWPD)"
+]
 
-    data = xgb_predict()
+@app.get("/train_lstm")
+async def train():
+    df = pd.read_excel(INPUT_EXCEL)
+    model = WellLSTMModel(LSTM_MODEL_DIR, LSTM_PREDICTION_EXCEL)
 
-    return {
-        "explanation": data["explanation"],
-        "shap_local_b64": data["shap_local_b64"],
-        # "shap_global_b64": data["shap_global_b64"],
-        # "time_series_plot": data["plot_path"]  # file path to saved image (if generated) 
-    }
+    model.train(df)
+    return {"status": "trained", "model_path": str(model.model_path)}
 
-@app.get("/lstm_predict")
-def forecast():
+@app.get("/predict_lstm")
+async def predict():
+    df = pd.read_excel(INPUT_EXCEL)
+    model = WellLSTMModel(LSTM_MODEL_DIR, LSTM_PREDICTION_EXCEL)
+    df_out = model.predict(df)
 
-    data = lstm_predict()
+    errors = model.calculate_errors(df_out)
 
-    return {
-        "forecast_df": data["forecast_df"],
-        "preds_df": data["preds_df"]
-    }
-
-@app.get("/predict_production")
-def predict_data():
-    errors = predict_production()
-
-    return errors
-
-@app.get("/xgb_forecast")
-def forecast():
-    xgb_forecast()   
-
-@app.get("/lstm_forecast")
-def forecast():
-    lstm_forecast()    
-
-@app.get("/gen_data")
-def forecast():
-    # generate_template_data()
-    generate_history_data()
-
-@app.get("/plot_predict")
-def forecast():
-    plot_predict()
-
-    return {"Plot created"}
-
-@app.get("/plot_forecast")
-def forecast():
-    # plot()
-    #xgb_plot()
-    # plot_data()
-    plot_forecast()
-    #lstm_forecast_plot()
-    #lstm_explanation()
-
-@app.get("/lstm_forecast_plot")
-def forecast():
-    # plot_forecast()
-    #plot_history()
-    plot_test()
-    # plot_train()
+    return {"status": "predicted", "saved_file": str(model.predicted_excel), "error": errors}
 
 
-@app.get("/error_predict")
-def forecast():
-    result = error_predict()
-
-    return { "result": result}
-
-
-@app.get("/error_forecast")
-def forecast():
-    result = error_forecast()
-
-    return { "result": result}
+def _plot_to_response(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    plt.close(fig)
+    return StreamingResponse(buf, media_type="image/png")
 
 
-@app.get("/get_monthly_average_data")
-def get_monthly():
-    result = get_monthly_average_data()
+@app.post("/plot_lstm_none/")
+async def plot(request: PlotRequest):
+    model = WellLSTMModel(LSTM_MODEL_DIR, LSTM_PREDICTION_EXCEL)
+    
+    df = pd.read_excel(model.predicted_excel)
+    if request.cumulative:
+        out = model.plot_cumulative(df, request.well_id, save_dir=LSTM_PLOT_DIR)
+    else:
+        out = model.plot_actual_vs_pred(df, request.well_id, save_dir=LSTM_PLOT_DIR)
 
-    return {"Monthly data created"}
+    if out is None:
+        return JSONResponse(content={"error": "well not found"}, status_code=404)
+    return FileResponse(out)
 
+@app.post("/plot_lstm/")
+async def plot(request: PlotRequest):
+    
+    model = WellLSTMModel(LSTM_MODEL_DIR, LSTM_PREDICTION_EXCEL)
+    df = pd.read_excel(model.predicted_excel)
+
+    if request.cumulative:
+        fig = model.plot_cumulative(df, request.well_id,save_dir=LSTM_PLOT_DIR, return_fig=True)
+    else:
+        fig = model.plot_actual_vs_pred(df, request.well_id,save_dir=LSTM_PLOT_DIR, return_fig=True)
+    
+    return _plot_to_response(fig)
+
+@app.post("/plot_lstm_target")
+async def plot(request: PlotRequest):
+    
+    model = WellLSTMModel(LSTM_MODEL_DIR, LSTM_PREDICTION_EXCEL)
+    target = TARGET_COLS[2]
+    if request.cumulative:
+        fig = model.plot_cumulative_from_file(LSTM_PREDICTION_EXCEL, request.well_id, target,
+                                  save_dir=LSTM_PLOT_DIR, return_fig=True)
+    else:
+        fig = model.plot_actual_vs_pred_from_file(LSTM_PREDICTION_EXCEL, request.well_id, target,
+                                  save_dir=LSTM_PLOT_DIR, return_fig=True)
+    return _plot_to_response(fig)
+
+@app.post("/plot_lstm_all")
+async def plot(request: PlotRequest):
+    model = WellLSTMModel(LSTM_MODEL_DIR, LSTM_PREDICTION_EXCEL)
+    
+    df = pd.read_excel(model.predicted_excel)
+    if request.cumulative:
+        out = model.plot_cumulative_all(df, request.well_id, save_dir=LSTM_PLOT_DIR)
+    else:
+        out = model.plot_actual_vs_pred_all(df, request.well_id, save_dir=LSTM_PLOT_DIR)
+
+    if out is None:
+        return JSONResponse(content={"error": "well not found"}, status_code=404)
+    return FileResponse(out)
+
+
+@app.get("/train_xgb")
+async def train():
+    df = pd.read_excel(INPUT_EXCEL)
+    xgb_model = XGBModel(TARGET_COLS, model_path=XGB_MODEL_PATH)
+
+    xgb_model.train(df)
+    return {"message": "XGB model trained and saved."}
+
+
+@app.get("/predict_xgb")
+async def predict():
+    df = pd.read_excel(INPUT_EXCEL)
+    xgb_model = XGBModel(TARGET_COLS, model_path=XGB_MODEL_PATH)
+
+    filename="predictions_xgb.xlsx"
+    df_out = xgb_model.predict(df,save_dir= XGB_EXCEL_DIR,  save=True, filename=filename)
+    errors = xgb_model.evaluate(df_out)
+    
+    return {"message": "Predictions saved", "file_path": f"{XGB_EXCEL_DIR}/{filename}", "errors": errors}
+
+
+@app.post("/plot_xgb")
+async def plot(request: PlotRequest):
+    
+    df = pd.read_excel(XGB_PREDICTION_EXCEL)
+    xgb_model = XGBModel(TARGET_COLS, model_path=XGB_MODEL_PATH)
+
+    if request.cumulative:
+        fig = xgb_model.plot_cumulative(df, request.well_id,save_dir=XGB_PLOT_DIR, return_fig=True)
+    else:
+        fig = xgb_model.plot_actual_vs_pred(df, request.well_id,save_dir=XGB_PLOT_DIR, return_fig=True)
+    
+    return _plot_to_response(fig)
+
+@app.post("/plot_xgb_target")
+async def plot(request: PlotRequest):
+    model = XGBModel(TARGET_COLS, model_path=XGB_MODEL_PATH)
+    
+    target = TARGET_COLS[2]
+    if request.cumulative:
+        fig = model.plot_cumulative_from_file(XGB_PREDICTION_EXCEL, request.well_id, target,
+                                  save_dir=XGB_PLOT_DIR, return_fig=True)
+    else:
+        fig = model.plot_actual_vs_pred_from_file(XGB_PREDICTION_EXCEL, request.well_id, target,
+                                  save_dir=XGB_PLOT_DIR, return_fig=True)
+        
+    return _plot_to_response(fig)
+
+@app.post("/plot_xgb_all/")
+async def plot(request: PlotRequest):
+    model = XGBModel(TARGET_COLS, model_path=XGB_MODEL_PATH)
+    df = pd.read_excel(XGB_PREDICTION_EXCEL)
+
+    if request.cumulative:
+        out = model.plot_cumulative_all(df, request.well_id, save_dir=LSTM_PLOT_DIR)
+    else:
+        out = model.plot_actual_vs_pred_all(df, request.well_id, save_dir=LSTM_PLOT_DIR)
+
+    if out is None:
+        return JSONResponse(content={"error": "well not found"}, status_code=404)
+    return FileResponse(out)
