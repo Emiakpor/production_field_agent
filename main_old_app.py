@@ -25,7 +25,6 @@ app = FastAPI(
     openapi_url="/openapi.json"  # OpenAPI JSON URL
 )
 
-UPLOAD_DIR = "./src/resource/"
 NIGER_DELTA_EXCEL = "./src/resource/niger_delta.xlsx"
 NIGER_DELTA_EXCEL_SI_UNITS = "./src/resource/niger_delta_si_units.xlsx"
 INPUT_EXCEL = "./src/resource/oilfield_sample_data_with_units.xlsx"
@@ -60,9 +59,6 @@ class PlotRequest(BaseModel):
 class PlotTargetRequest(PlotRequest):
     target: str
 
-class UploadFileRequest(BaseModel):
-    filename: str
-
 
 TARGET_COLS = [
     "oil_rate_bopd (BOPD)",
@@ -70,18 +66,40 @@ TARGET_COLS = [
     "water_rate_bwpd (BWPD)"
 ]
 
+
+@app.get("/gen_data_statistics")
+async def gen_data():
+    df = pd.read_excel(NIGER_DELTA_EXCEL)
+    stat = StatisticsCalculator(df)
+
+    stat.save_to_excel(STATISTICAL_EXCEL)
+
+    return {"success": "Statistics data created"}
+
+
 @app.post("/upload_excel/")
 async def upload_excel(file: UploadFile = File(...)):
     """Endpoint to upload and save Excel file"""
 
     # Instantiate the uploader class
-    uploader = ExcelUploader(upload_dir=UPLOAD_DIR)
+    uploader = ExcelUploader(upload_dir="uploads")
     file_path = await uploader.save_file(file)
     filename = os.path.basename(file_path)
 
     return JSONResponse({
-        "message": "File uploaded successfully!"
+        "message": "File uploaded successfully!",
+        "filename": filename,
+        "file_path": file_path
     })
+
+@app.get("/gen_data_statistics_si_unit")
+async def gen_data():
+    df = pd.read_excel(NIGER_DELTA_EXCEL_SI_UNITS)
+    stat = StatisticsCalculator(df)
+
+    stat.save_to_excel(STATISTICAL_EXCEL_SI_UNIT)
+
+    return {"success": "Statistics data created"}
 
 
 @app.get("/train_lstm")
@@ -103,6 +121,14 @@ async def predict():
     return {"status": "predicted", "saved_file": str(model.predicted_excel), "error": errors}
 
 
+def _plot_to_response(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    plt.close(fig)
+    return StreamingResponse(buf, media_type="image/png")
+
+
 @app.post("/plot_lstm_target")
 async def plot(request: PlotTargetRequest):
     
@@ -120,8 +146,7 @@ async def plot(request: PlotTargetRequest):
     else:
         fig = model.plot_actual_vs_pred_from_file(LSTM_PREDICTION_EXCEL, request.well_id, target,
                                   save_dir=LSTM_PLOT_DIR, return_fig=True)
-    return model._plot_to_response(fig)
-
+    return _plot_to_response(fig)
 
 @app.post("/plot_lstm_all")
 async def plot(request: PlotRequest):
@@ -160,7 +185,7 @@ async def predict():
 
 
 @app.post("/plot_xgb_target")
-async def plot(request: PlotTargetRequest):
+async def plot(request: PlotRequest):
     model = XGBModel(TARGET_COLS, model_path=XGB_MODEL_PATH)
     
     if request.target.lower()  == "oil":
@@ -177,7 +202,7 @@ async def plot(request: PlotTargetRequest):
         fig = model.plot_actual_vs_pred_from_file(XGB_PREDICTION_EXCEL, request.well_id, target,
                                   save_dir=XGB_PLOT_DIR, return_fig=True)
         
-    return model._plot_to_response(fig)
+    return _plot_to_response(fig)
 
 @app.post("/plot_xgb_all/")
 async def plot(request: PlotRequest):
@@ -193,27 +218,8 @@ async def plot(request: PlotRequest):
         return JSONResponse(content={"error": "well not found"}, status_code=404)
     return FileResponse(out)
 
-# @app.get("/gen_data_statistics")
-async def gen_data():
-    df = pd.read_excel(NIGER_DELTA_EXCEL)
-    stat = StatisticsCalculator(df)
 
-    stat.save_to_excel(STATISTICAL_EXCEL)
-
-    return {"success": "Statistics data created"}
-
-
-# @app.get("/gen_data_statistics_si_unit")
-async def gen_data():
-    df = pd.read_excel(NIGER_DELTA_EXCEL_SI_UNITS)
-    stat = StatisticsCalculator(df)
-
-    stat.save_to_excel(STATISTICAL_EXCEL_SI_UNIT)
-
-    return {"success": "Statistics data created"}
-
-
-# @app.get("/get_correlation")
+@app.get("/get_correlation")
 def get_weather_panel_historical_data():
 
     df = pd.read_excel(NIGER_DELTA_EXCEL)
@@ -246,7 +252,7 @@ def get_weather_panel_historical_data():
 
     return {"Success": "CORR matrix Data created and save"}
 
-# @app.post("/convert-to-si/")
+@app.post("/convert-to-si/")
 async def convert_to_si():
 
     try:
@@ -277,7 +283,7 @@ async def convert_to_si():
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
-# @app.post("/convert-to-si-unit/")
+@app.post("/convert-to-si-unit/")
 async def convert_to_si_unit():
      # Run conversion
     converter = EmpiricalToSIConverter(NIGER_DELTA_EXCEL, NIGER_DELTA_EXCEL_SI_UNITS)       

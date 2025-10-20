@@ -1,3 +1,5 @@
+import io
+from fastapi.responses import StreamingResponse
 import os
 from pathlib import Path
 from typing import List, Dict, Tuple
@@ -50,7 +52,7 @@ class WellLSTMModel:
             "gas_rate_mscf_day (MSCF/day)",
             "water_rate_bwpd (BWPD)",
         ]
-        self.cat_cols = ["completion_type", "lift_type", "region", "shift", "well_id"]
+        self.cat_cols = ["completion_type", "lift_type", "region", "shift", "well_id", "field"]
         self.bool_cols = ["maintenance_event", "shutdown_flag"]
 
     # -----------------
@@ -252,12 +254,12 @@ class WellLSTMModel:
             ax.grid(True)
 
             file_path = os.path.join(save_dir, f"actual_vs_pred_{well_id}_{re.sub(r"[ /]", "_", col)}.png")
-            fig.savefig(file_path, bbox_inches="tight")
+            fig.savefig(file_path, dpi=300, bbox_inches="tight")
 
             if return_fig:
                 return fig
             else:
-                plt.close(fig)
+                plt.show(fig)
 
     def plot_cumulative(self, df_out: pd.DataFrame, well_id, save_dir="src/plots/xgb", return_fig=False):
         os.makedirs(save_dir, exist_ok=True)
@@ -274,7 +276,7 @@ class WellLSTMModel:
             ax.grid(True)
 
             file_path = os.path.join(save_dir, f"cumulative_{well_id}_{re.sub(r"[ /]", "_", col)}.png")
-            fig.savefig(file_path, bbox_inches="tight")
+            fig.savefig(file_path, dpi=300, bbox_inches="tight")
 
             if return_fig:
                 return fig
@@ -299,8 +301,8 @@ class WellLSTMModel:
 
         plt.legend()
         out = save_dir / f"actual_vs_pred_{well_id}.png"
-        plt.savefig(out)
-        plt.close()
+        plt.savefig(out, dpi=300, bbox_inches="tight")
+        plt.show()
         return out
 
     def plot_cumulative_all(self, df_out: pd.DataFrame, well_id: str, save_dir="output/plots"):
@@ -321,8 +323,8 @@ class WellLSTMModel:
 
         plt.legend()
         out = save_dir / f"cumulative_{well_id}.png"
-        plt.savefig(out)
-        plt.close()
+        plt.savefig(out, dpi=300, bbox_inches="tight")
+        plt.show()
         return out
     
     def plot_actual_vs_pred_from_file(self, file_path: str, well_id: str, target: str,
@@ -346,12 +348,12 @@ class WellLSTMModel:
         ax.grid(True)
 
         file_out = os.path.join(save_dir, f"actual_vs_pred_{well_id}_{re.sub(r"[ /]", "_", target)}.png")
-        fig.savefig(file_out, bbox_inches="tight")
+        fig.savefig(file_out, dpi=300, bbox_inches="tight")
 
         if return_fig:
             return fig
         else:
-            plt.close(fig)
+            plt.show(fig)
 
     def plot_cumulative_from_file(self, file_path: str, well_id: str, target: str,
                                   save_dir="src/plots/xgb", return_fig=False):
@@ -374,11 +376,18 @@ class WellLSTMModel:
         ax.grid(True)
 
         file_out = os.path.join(save_dir, f"cumulative_{well_id}_{re.sub(r"[ /]", "_", target)}.png")
-        fig.savefig(file_out, bbox_inches="tight")
+        fig.savefig(file_out, dpi=300, bbox_inches="tight")
 
         if return_fig:
             return fig
         else:
-            plt.close(fig)
+            plt.show(fig)
+
+    def _plot_to_response(self,fig):
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        plt.close(fig)
+        return StreamingResponse(buf, media_type="image/png")
 
 

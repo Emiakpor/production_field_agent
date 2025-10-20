@@ -1,3 +1,5 @@
+import io
+from fastapi.responses import StreamingResponse
 import os
 import joblib
 import re
@@ -368,7 +370,7 @@ class XGBModel:
             if return_fig:
                 return fig
             else:
-                plt.close(fig)
+                plt.show(fig)
 
     def plot_cumulative(self, df_out: pd.DataFrame, well_id, save_dir="src/plots/xgb", return_fig=False):
         os.makedirs(save_dir, exist_ok=True)
@@ -391,7 +393,7 @@ class XGBModel:
             if return_fig:
                 return fig
             else:
-                plt.close(fig)
+                plt.show(fig)
 
     def plot_actual_vs_pred_from_file(self, file_path: str, well_id: str, target: str,
                                       save_dir="src/plots/xgb", return_fig=False):
@@ -419,7 +421,7 @@ class XGBModel:
         if return_fig:
             return fig
         else:
-            plt.close(fig)
+            plt.show(fig)
 
     def plot_cumulative_from_file(self, file_path: str, well_id: str, target: str,
                                   save_dir="src/plots/xgb", return_fig=False):
@@ -447,7 +449,7 @@ class XGBModel:
         if return_fig:
             return fig
         else:
-            plt.close(fig)
+            plt.show(fig)
 
     def plot_actual_vs_pred_all(self, df_out: pd.DataFrame, well_id: str, save_dir="output/plots"):
         save_dir = Path(save_dir)
@@ -469,7 +471,7 @@ class XGBModel:
         plt.legend()
         out = save_dir / f"actual_vs_pred_{well_id}.png"
         plt.savefig(out)
-        plt.close()
+        plt.show()
         return out
 
     def plot_cumulative_all(self, df_out: pd.DataFrame, well_id: str, save_dir="output/plots"):
@@ -491,6 +493,12 @@ class XGBModel:
         plt.legend()
         out = save_dir / f"cumulative_{well_id}.png"
         plt.savefig(out)
-        plt.close()
+        plt.show()
         return out
     
+    def _plot_to_response(self,fig):
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        plt.close(fig)
+        return StreamingResponse(buf, media_type="image/png")

@@ -193,7 +193,7 @@ async def plot(request: PlotRequest):
         return JSONResponse(content={"error": "well not found"}, status_code=404)
     return FileResponse(out)
 
-# @app.get("/gen_data_statistics")
+@app.get("/gen_data_statistics")
 async def gen_data():
     df = pd.read_excel(NIGER_DELTA_EXCEL)
     stat = StatisticsCalculator(df)
@@ -203,7 +203,7 @@ async def gen_data():
     return {"success": "Statistics data created"}
 
 
-# @app.get("/gen_data_statistics_si_unit")
+@app.get("/gen_data_statistics_si_unit")
 async def gen_data():
     df = pd.read_excel(NIGER_DELTA_EXCEL_SI_UNITS)
     stat = StatisticsCalculator(df)
@@ -213,7 +213,7 @@ async def gen_data():
     return {"success": "Statistics data created"}
 
 
-# @app.get("/get_correlation")
+@app.get("/get_correlation")
 def get_weather_panel_historical_data():
 
     df = pd.read_excel(NIGER_DELTA_EXCEL)
@@ -246,7 +246,7 @@ def get_weather_panel_historical_data():
 
     return {"Success": "CORR matrix Data created and save"}
 
-# @app.post("/convert-to-si/")
+@app.post("/convert-to-si/")
 async def convert_to_si():
 
     try:
@@ -277,7 +277,7 @@ async def convert_to_si():
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
-# @app.post("/convert-to-si-unit/")
+@app.post("/convert-to-si-unit/")
 async def convert_to_si_unit():
      # Run conversion
     converter = EmpiricalToSIConverter(NIGER_DELTA_EXCEL, NIGER_DELTA_EXCEL_SI_UNITS)       
